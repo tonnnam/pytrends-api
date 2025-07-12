@@ -120,27 +120,37 @@ def fetch_trending_data():
         print(f"❌ Error fetching trends: {e}")
         return []
 
-
-
-
-
 def update_trends_cache():
     global cached_trends, last_update
+
     new_trends = fetch_trending_data()
-    if new_trends and len(new_trends) >= 5:
-        cached_trends = new_trends[:10]
+    fallback, quarter = get_fallback_trends_by_quarter()
+
+    if new_trends and len(new_trends) >= 1:
+        # ใช้ข้อมูลจริงเป็นหลัก
+        combined_trends = new_trends[:10]  # ถ้ามากกว่า 10 ก็ตัดเหลือ 10
+
+        # เติม fallback trends ถ้าจำนวนไม่ครบ 10
+        if len(combined_trends) < 10:
+            needed = 10 - len(combined_trends)
+            # เติม fallback ที่ไม่ซ้ำกับข้อมูลจริง
+            fillers = [t for t in fallback if t not in combined_trends]
+            combined_trends.extend(fillers[:needed])
+
+        cached_trends = combined_trends
+        print(f"✅ ใช้ข้อมูลเทรนด์จาก Google Trends พร้อมเติม fallback ให้ครบ 10 รายการ")
     else:
-        cached_trends = get_fallback_trends()[:10]
+        # ใช้ fallback เต็ม ๆ เพราะไม่มีข้อมูลจริงเลย
+        cached_trends = fallback[:10]
+        print(f"⚠️ ใช้ fallback trends ไตรมาส {quarter} เต็มรูปแบบ")
+
     last_update = datetime.now()
     print(f"📊 อัปเดตข้อมูลเทรนด์เรียบร้อยแล้ว ({len(cached_trends)} รายการ)")
-
-
 def should_update_cache():
     if not cached_trends or last_update is None:
         return True
     elapsed = (datetime.now() - last_update).total_seconds()
     return elapsed > update_interval
-
 
 def background_update():
     while True:
