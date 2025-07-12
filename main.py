@@ -1,4 +1,3 @@
-
 import os
 import json
 import time
@@ -208,26 +207,31 @@ def home():
 
 @app.route("/api/trends")
 def get_trends():
-    """ดึงข้อมูลธุรกิจยอดนิยม 10 อันดับแรก"""
     try:
-        # ตรวจสอบว่าต้องอัปเดตหรือไม่
         if should_update_cache():
             update_trends_cache()
-        
-        # ส่งข้อมูลกลับ
+
+        # ✅ ป้องกัน last_update เป็น None
+        last = last_update.isoformat() if isinstance(last_update, datetime) else None
+        next_update = (
+            (last_update + timedelta(seconds=update_interval)).isoformat()
+            if isinstance(last_update, datetime)
+            else None
+        )
+
         return jsonify({
             "trends": cached_trends,
-            "last_update": last_update.isoformat() if last_update else None,
-            "next_update": (last_update + timedelta(seconds=update_interval)).isoformat() if last_update else None,
+            "last_update": last,
+            "next_update": next_update,
             "total_count": len(cached_trends)
         })
-        
+
     except Exception as e:
         return jsonify({
             "error": str(e),
             "fallback_trends": get_fallback_trends()[:10]
         }), 500
-
+        
 @app.route("/api/trends/fresh")
 def get_fresh_trends():
     """บังคับอัปเดตข้อมูลใหม่"""
@@ -237,7 +241,7 @@ def get_fresh_trends():
         return jsonify({
             "message": "อัปเดตข้อมูลเทรนด์ใหม่เรียบร้อย",
             "trends": cached_trends,
-            "updated_at": last_update.isoformat(),
+            "updated_at": last_update.isoformat() if isinstance(last_update, datetime) else None,
             "total_count": len(cached_trends)
         })
         
@@ -280,6 +284,29 @@ def internal_error(error):
         "error": "Internal server error",
         "message": "กรุณาลองใหม่อีกครั้ง"
     }), 500
+
+# 🔍 ทดสอบ pytrends ดึงข้อมูลได้ไหม
+def test_pytrends_connection():
+    from pytrends.request import TrendReq
+
+    print("🚀 ทดสอบ pytrends...")
+
+    try:
+        pytrends = TrendReq(hl='th-TH', tz=360)
+        pytrends.build_payload(kw_list=["ธุรกิจ"], geo="TH", timeframe="now 7-d")
+        related = pytrends.related_queries()
+
+        if related and "ธุรกิจ" in related:
+            print("✅ ดึงข้อมูลสำเร็จ:")
+            print("🔸 top:", related["ธุรกิจ"].get("top"))
+            print("🔸 rising:", related["ธุรกิจ"].get("rising"))
+        else:
+            print("⚠️ ไม่มีข้อมูล related queries เลย (อาจถูก block หรือคำค้นไม่แม่น)")
+    except Exception as e:
+        print(f"❌ เกิดข้อผิดพลาด: {e}")
+
+# เรียกฟังก์ชันทดสอบ
+test_pytrends_connection()
 
 if __name__ == "__main__":
     print("🚀 Starting Thai Business Trends API...")
